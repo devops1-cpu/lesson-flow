@@ -2,6 +2,11 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+const express = require('express');
+const { Pool } = require('pg');
+
+
+
 const authRoutes = require('./routes/authRoutes');
 const lessonPlanRoutes = require('./routes/lessonPlanRoutes');
 const classRoutes = require('./routes/classRoutes');
@@ -24,10 +29,20 @@ const timeoffRoutes = require('./routes/timeoffRoutes');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+
+
+
 // Middleware
 const corsOptions = { origin: process.env.FRONTEND_URL || true };
 app.use(cors(corsOptions));
 app.use(express.json());
+
+const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL 
+});
+
+// Vercel: export app
+module.exports = app;
 
 // Routes
 app.use('/api/auth', authRoutes);
