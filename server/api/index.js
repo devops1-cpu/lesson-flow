@@ -7,24 +7,24 @@ const { Pool } = require('pg');
 
 
 
-const authRoutes = require('./routes/authRoutes');
-const lessonPlanRoutes = require('./routes/lessonPlanRoutes');
-const classRoutes = require('./routes/classRoutes');
-const userRoutes = require('./routes/userRoutes');
-const departmentRoutes = require('./routes/departmentRoutes');
-const readinessRoutes = require('./routes/readinessRoutes');
-const ocrRoutes = require('./routes/ocrRoutes');
-const adminRoutes = require('./routes/adminRoutes');
-const processRoutes = require('./routes/processRoutes');
-const exportRoutes = require('./routes/exportRoutes');
-const tutorRoutes = require('./routes/tutorRoutes');
-const analyticsRoutes = require('./routes/analyticsRoutes');
-const commentRoutes = require('./routes/commentRoutes');
-const roomRoutes = require('./routes/roomRoutes');
-const periodRoutes = require('./routes/periodRoutes');
-const timetableRoutes = require('./routes/timetableRoutes');
-const lessonConfigRoutes = require('./routes/lessonConfigRoutes');
-const timeoffRoutes = require('./routes/timeoffRoutes');
+const authRoutes = require('../src/routes/authRoutes');
+const lessonPlanRoutes = require('../src/routes/lessonPlanRoutes');
+const classRoutes = require('../src/routes/classRoutes');
+const userRoutes = require('../src/routes/userRoutes');
+const departmentRoutes = require('../src/routes/departmentRoutes');
+const readinessRoutes = require('../src/routes/readinessRoutes');
+const ocrRoutes = require('../src/routes/ocrRoutes');
+const adminRoutes = require('../src/routes/adminRoutes');
+const processRoutes = require('../src/routes/processRoutes');
+const exportRoutes = require('../src/routes/exportRoutes');
+const tutorRoutes = require('../src/routes/tutorRoutes');
+const analyticsRoutes = require('../src/routes/analyticsRoutes');
+const commentRoutes = require('../src/routes/commentRoutes');
+const roomRoutes = require('../src/routes/roomRoutes');
+const periodRoutes = require('../src/routes/periodRoutes');
+const timetableRoutes = require('../src/routes/timetableRoutes');
+const lessonConfigRoutes = require('../src/routes/lessonConfigRoutes');
+const timeoffRoutes = require('../src/routes/timeoffRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
