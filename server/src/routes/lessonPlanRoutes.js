@@ -14,7 +14,7 @@ router.get('/reminders/teacher', authenticate, requireRole('TEACHER', 'ADMIN', '
         const schedule = await prisma.timetableSlot.findMany({
             where: { teacherId },
             include: {
-                class: { select: { id: true, name: true, grade: true, section: true } },
+                classes: { include: { class: { select: { id: true, name: true, grade: true, section: true } } } },
                 subject: { select: { id: true, name: true } },
                 period: { select: { id: true, number: true, startTime: true, endTime: true } }
             }
@@ -45,11 +45,11 @@ router.get('/reminders/teacher', authenticate, requireRole('TEACHER', 'ADMIN', '
                         missing.push(existing);
                     }
                     existing[dateStr].missing.push({
-                        classId: slot.class?.id,
-                        className: slot.class?.name,
-                        grade: slot.class?.grade,
-                        section: slot.class?.section,
-                        subjectName: slot.subject?.name,
+                        classId: slot.classes?.[0]?.classId,
+                        className: slot.classes?.map(c => c.class?.name).join(', '),
+                        grade: slot.classes?.[0]?.class?.grade,
+                        section: slot.classes?.map(c => c.class?.section).join(', '),
+                        subjectName: slot.subject?.name || slot.title || 'Meeting',
                         periodNumber: slot.period?.number,
                         time: slot.period ? `${slot.period.startTime} - ${slot.period.endTime}` : ''
                     });

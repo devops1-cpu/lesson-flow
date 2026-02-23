@@ -25,7 +25,8 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+const corsOptions = { origin: process.env.FRONTEND_URL || true };
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Routes
@@ -59,6 +60,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong!', message: err.message });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    const host = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : `http://localhost:${PORT}`;
+    console.log(`🚀 Server running on ${host}`);
+  });
+}
+
+module.exports = app;

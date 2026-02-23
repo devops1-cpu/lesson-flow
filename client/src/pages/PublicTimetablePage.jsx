@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API = '/api';
 
 const COLORS = [
     '#4285f4', '#ea4335', '#fbbc04', '#34a853', '#ff6d01', '#46bdc6', '#7baaf7',

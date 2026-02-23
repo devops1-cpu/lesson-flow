@@ -57,7 +57,7 @@ model User {
   classesOwned        Class[]               @relation("ClassOwner")
   teacherAssignments  TeacherAssignment[]
   commentsMade        LessonComment[]       @relation("UserComments")
-  timetableSlots      TimetableSlot[]       @relation("TeacherSlots")
+  slotTeachers        SlotTeacher[]
   teacherAvailability TeacherAvailability[] @relation("TeacherAvailability")
   lessonTeachers      LessonTeacher[]
 }
@@ -129,8 +129,8 @@ model Class {
   owner                User                  @relation("ClassOwner", fields: [ownerId], references: [id])
   members              ClassMember[]
   lessonPlans          LessonPlan[]
-  timetableSlots       TimetableSlot[]
-  timetableLessons     TimetableLesson[]
+  slotClasses          SlotClass[]
+  lessonClasses        LessonClass[]
   timetableAssignments TimetableAssignment[]
   availabilities       ClassAvailability[]
   TeacherAssignment    TeacherAssignment[]
@@ -262,21 +262,30 @@ model ParentStudent {
 model TimetableLesson {
   id String @id @default(uuid())
 
-  subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId String?
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-  classId String
-  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  title    String?   // For meetings or custom labels
 
   count    Int       @default(1) // Lessons per week
   length   Int       @default(1) // Periods per lesson (1=single, 2=double)
   roomType RoomType? // Preferred room type (null = any)
 
-  // Teachers are linked via LessonTeacher (supports single + combinations)
+  classes  LessonClass[]
   teachers LessonTeacher[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model LessonClass {
+  id        String          @id @default(uuid())
+  lessonId  String
+  lesson    TimetableLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  classId   String
+  class     Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, classId])
 }
 
 model LessonTeacher {
@@ -342,27 +351,41 @@ model TimetableSlot {
   periodId String
   period   Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
-  classId String
-  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId String?
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-  teacherId String
-  teacher   User   @relation("TeacherSlots", fields: [teacherId], references: [id], onDelete: Cascade)
-
-  subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  title     String?
 
   roomId String?
   room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  classes  SlotClass[]
+  teachers SlotTeacher[]
 
   timetableAssignments TimetableAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
 
-  // Constraints: no double-booking
-  @@unique([dayOfWeek, periodId, classId]) // A class can't have two lessons at same time
-  @@unique([dayOfWeek, periodId, teacherId]) // A teacher can't be in two places
-  @@unique([dayOfWeek, periodId, roomId]) // A room can't be double-booked
+model SlotClass {
+  id        String        @id @default(uuid())
+  slotId    String
+  slot      TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  classId   String
+  class     Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([slotId, classId])
+}
+
+model SlotTeacher {
+  id        String        @id @default(uuid())
+  slotId    String
+  slot      TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  teacherId String
+  teacher   User          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([slotId, teacherId])
 }
 
 model TimetableAssignment {

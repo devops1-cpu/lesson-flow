@@ -5,7 +5,11 @@ const prisma = require('../config/prisma.js');
 const router = express.Router();
 const lessonIncludes = {
     subject: { select: { id: true, name: true, code: true, abbreviation: true, color: true } },
-    class: { select: { id: true, name: true, section: true, grade: true, capacity: true } },
+    classes: {
+        include: {
+            class: { select: { id: true, name: true, section: true, grade: true, capacity: true } }
+        }
+    },
     teachers: {
         include: {
             teacher: { select: { id: true, name: true, email: true } }
@@ -18,13 +22,13 @@ router.get('/', authenticate, async (req, res) => {
     try {
         const { classId, subjectId } = req.query;
         const where = {};
-        if (classId) where.classId = classId;
+        if (classId) where.classes = { some: { classId } };
         if (subjectId) where.subjectId = subjectId;
 
         const lessons = await prisma.timetableLesson.findMany({
             where,
             include: lessonIncludes,
-            orderBy: [{ class: { name: 'asc' } }, { subject: { name: 'asc' } }]
+            orderBy: [{ subject: { name: 'asc' } }]
         });
         res.json(lessons);
     } catch (error) {
@@ -37,7 +41,7 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/class/:classId', authenticate, async (req, res) => {
     try {
         const lessons = await prisma.timetableLesson.findMany({
-            where: { classId: req.params.classId },
+            where: { classes: { some: { classId: req.params.classId } } },
             include: lessonIncludes,
             orderBy: { subject: { name: 'asc' } }
         });
@@ -53,7 +57,7 @@ router.get('/summary', authenticate, async (req, res) => {
         const lessons = await prisma.timetableLesson.findMany({
             include: {
                 subject: { select: { id: true, name: true } },
-                class: { select: { id: true, name: true } },
+                classes: { include: { class: { select: { id: true, name: true } } } },
                 teachers: { include: { teacher: { select: { id: true, name: true } } } }
             }
         });
@@ -61,18 +65,22 @@ router.get('/summary', authenticate, async (req, res) => {
         // Count by class
         const byClass = {};
         for (const l of lessons) {
-            const key = l.classId;
-            if (!byClass[key]) byClass[key] = { classId: key, className: l.class.name, totalLessons: 0, totalPeriods: 0 };
-            byClass[key].totalLessons += 1;
-            byClass[key].totalPeriods += l.count * l.length;
+            for (const lc of l.classes) {
+                const key = lc.classId;
+                if (!byClass[key]) byClass[key] = { classId: key, className: lc.class.name, totalLessons: 0, totalPeriods: 0 };
+                byClass[key].totalLessons += 1;
+                byClass[key].totalPeriods += l.count * l.length;
+            }
         }
 
         // Count by subject
         const bySubject = {};
         for (const l of lessons) {
-            const key = l.subjectId;
-            if (!bySubject[key]) bySubject[key] = { subjectId: key, subjectName: l.subject.name, totalLessons: 0 };
-            bySubject[key].totalLessons += l.count;
+            if (l.subject) {
+                const key = l.subjectId;
+                if (!bySubject[key]) bySubject[key] = { subjectId: key, subjectName: l.subject.name, totalLessons: 0 };
+                bySubject[key].totalLessons += l.count;
+            }
         }
 
         // Count by teacher
@@ -99,10 +107,13 @@ router.get('/summary', authenticate, async (req, res) => {
 // ─── Create lesson ───
 router.post('/', authenticate, requireRole('ADMIN'), async (req, res) => {
     try {
-        const { subjectId, classId, teacherIds, count, length, roomType } = req.body;
+        const { subjectId, classIds, teacherIds, count, length, roomType, title, isMeeting } = req.body;
 
-        if (!subjectId || !classId) {
-            return res.status(400).json({ error: 'Subject and class are required.' });
+        if (!isMeeting && (!subjectId || !classIds || classIds.length === 0)) {
+            return res.status(400).json({ error: 'Subject and at least one class are required.' });
+        }
+        if (isMeeting && !title) {
+            return res.status(400).json({ error: 'Title is required for meetings.' });
         }
         if (!teacherIds || !Array.isArray(teacherIds) || teacherIds.length === 0) {
             return res.status(400).json({ error: 'At least one teacher is required.' });
@@ -110,11 +121,14 @@ router.post('/', authenticate, requireRole('ADMIN'), async (req, res) => {
 
         const lesson = await prisma.timetableLesson.create({
             data: {
-                subjectId,
-                classId,
+                subjectId: isMeeting ? null : subjectId,
+                title: isMeeting ? title : null,
                 count: count || 1,
                 length: length || 1,
                 roomType: roomType || null,
+                classes: isMeeting ? undefined : {
+                    create: classIds.map(cid => ({ classId: cid }))
+                },
                 teachers: {
                     create: teacherIds.map(tid => ({ teacherId: tid }))
                 }
@@ -131,25 +145,33 @@ router.post('/', authenticate, requireRole('ADMIN'), async (req, res) => {
 // ─── Update lesson ───
 router.put('/:id', authenticate, requireRole('ADMIN'), async (req, res) => {
     try {
-        const { subjectId, classId, teacherIds, count, length, roomType } = req.body;
+        const { subjectId, classIds, teacherIds, count, length, roomType, title, isMeeting } = req.body;
 
         // Update main lesson fields
         const lesson = await prisma.timetableLesson.update({
             where: { id: req.params.id },
             data: {
-                ...(subjectId && { subjectId }),
-                ...(classId && { classId }),
+                subjectId: isMeeting ? null : (subjectId || null),
+                title: isMeeting ? title : null,
                 ...(count !== undefined && { count }),
                 ...(length !== undefined && { length }),
                 ...(roomType !== undefined && { roomType: roomType || null })
             }
         });
 
+        // Update classes if provided and not a meeting
+        if (!isMeeting && classIds && Array.isArray(classIds)) {
+            await prisma.lessonClass.deleteMany({ where: { lessonId: req.params.id } });
+            await prisma.lessonClass.createMany({
+                data: classIds.map(cid => ({ lessonId: req.params.id, classId: cid }))
+            });
+        } else if (isMeeting) {
+            await prisma.lessonClass.deleteMany({ where: { lessonId: req.params.id } });
+        }
+
         // Update teachers if provided
         if (teacherIds && Array.isArray(teacherIds)) {
-            // Remove existing
             await prisma.lessonTeacher.deleteMany({ where: { lessonId: req.params.id } });
-            // Add new
             await prisma.lessonTeacher.createMany({
                 data: teacherIds.map(tid => ({ lessonId: req.params.id, teacherId: tid }))
             });
@@ -190,26 +212,25 @@ router.post('/from-assignments', authenticate, requireRole('ADMIN'), async (req,
         for (const a of assignments) {
             // Check if lesson already exists for this subject+class
             const existing = await prisma.timetableLesson.findFirst({
-                where: { subjectId: a.subjectId, classId: a.classId }
+                where: { subjectId: a.subjectId, classes: { some: { classId: a.classId } } },
+                include: { teachers: true }
             });
 
             if (!existing) {
                 await prisma.timetableLesson.create({
                     data: {
                         subjectId: a.subjectId,
-                        classId: a.classId,
                         count: 1,
                         length: 1,
+                        classes: { create: [{ classId: a.classId }] },
                         teachers: { create: [{ teacherId: a.teacherId }] }
                     }
                 });
                 created++;
             } else {
                 // Add teacher if not already assigned
-                const existingTeacher = await prisma.lessonTeacher.findFirst({
-                    where: { lessonId: existing.id, teacherId: a.teacherId }
-                });
-                if (!existingTeacher) {
+                const hasTeacher = existing.teachers.some(t => t.teacherId === a.teacherId);
+                if (!hasTeacher) {
                     await prisma.lessonTeacher.create({
                         data: { lessonId: existing.id, teacherId: a.teacherId }
                     });
@@ -219,7 +240,7 @@ router.post('/from-assignments', authenticate, requireRole('ADMIN'), async (req,
 
         const allLessons = await prisma.timetableLesson.findMany({
             include: lessonIncludes,
-            orderBy: [{ class: { name: 'asc' } }, { subject: { name: 'asc' } }]
+            orderBy: [{ subject: { name: 'asc' } }]
         });
         res.json({ created, total: allLessons.length, lessons: allLessons });
     } catch (error) {

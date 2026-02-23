@@ -1,0 +1,59 @@
+# ======================
+# Root-level
+# ======================
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+__MACOSX/
+
+# ======================
+# Node modules (client & server)
+# ======================
+node_modules/
+**/node_modules/
+
+# ======================
+# Environment files (keep secrets safe)
+# ======================
+.env
+.env.local
+.env.*.local
+
+# ======================
+# Client (frontend) specific
+# ======================
+client/dist/
+client/.env
+client/.vite/
+
+# ======================
+# Server (backend) specific
+# ======================
+server/node_modules/
+server/.env
+server/prisma/migrations/
+server/uploads/
+
+# Ignore generated Prisma client files if any
+server/prisma/generated/
+
+# ======================
+# IDE/editor folders
+# ======================
+.vscode/
+.idea/
+
+node_modules
+
+client/node_modules
+client/node_modules/*
+
+server/node_modules
+server/node_modules/*

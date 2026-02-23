@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import html2pdf from 'html2pdf.js';
 import * as XLSX from 'xlsx';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API = '/api';
 
 const COLORS = [
     '#4285f4', '#ea4335', '#fbbc04', '#34a853', '#ff6d01', '#46bdc6', '#7baaf7',
@@ -22,7 +22,11 @@ function apiFetch(p, o = {}) {
     return fetch(`${API}${p}`, {
         ...o,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}`, ...o.headers }
-    }).then(r => r.json());
+    }).then(async r => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'API Error');
+        return d;
+    });
 }
 
 // ── Load/save per-grade working days from localStorage ──
@@ -57,17 +61,23 @@ function LessonsDialog({ open, onClose, onRefresh }) {
         setTeachers(Array.isArray(tc) ? tc : tc.users || []); setLoading(false);
     }, []);
     useEffect(() => { if (open) fetchAll() }, [open, fetchAll]);
-    const filtered = filterClass ? lessons.filter(l => l.classId === filterClass) : lessons;
+    const filtered = filterClass ? lessons.filter(l => l.classes?.some(c => c.classId === filterClass)) : lessons;
     const save = async () => {
-        if (!form.subjectId || !form.classId || form.teacherIds.length === 0) return;
+        if (!form.isMeeting && (!form.subjectId || form.classIds.length === 0 || form.teacherIds.length === 0)) return;
+        if (form.isMeeting && (!form.title || form.teacherIds.length === 0)) return;
         const body = { ...form, roomType: form.roomType || null };
-        if (form.id) await apiFetch(`/lesson-config/${form.id}`, { method: 'PUT', body: JSON.stringify(body) });
-        else await apiFetch('/lesson-config', { method: 'POST', body: JSON.stringify(body) });
-        setForm(null); fetchAll(); onRefresh?.();
+        try {
+            if (form.id) await apiFetch(`/lesson-config/${form.id}`, { method: 'PUT', body: JSON.stringify(body) });
+            else await apiFetch('/lesson-config', { method: 'POST', body: JSON.stringify(body) });
+            setForm(null); fetchAll(); onRefresh?.();
+        } catch (e) {
+            alert(e.message);
+        }
     };
     const del = async (id) => { if (!confirm('Delete?')) return; await apiFetch(`/lesson-config/${id}`, { method: 'DELETE' }); fetchAll(); onRefresh?.(); };
     const imp = async () => { await apiFetch('/lesson-config/from-assignments', { method: 'POST' }); fetchAll(); onRefresh?.(); };
     const tog = (tid) => setForm(f => ({ ...f, teacherIds: f.teacherIds.includes(tid) ? f.teacherIds.filter(t => t !== tid) : [...f.teacherIds, tid] }));
+    const togC = (cid) => setForm(f => ({ ...f, classIds: f.classIds.includes(cid) ? f.classIds.filter(c => c !== cid) : [...f.classIds, cid] }));
     return (
         <Modal open={open} onClose={onClose} title="📅 Lessons" wide>
             {form ? (<div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -75,10 +85,24 @@ function LessonsDialog({ open, onClose, onRefresh }) {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>{teachers.map(t => (
                         <button key={t.id} style={{ ...FS.chip, background: form.teacherIds.includes(t.id) ? '#4f46e5' : '#f1f5f9', color: form.teacherIds.includes(t.id) ? '#fff' : '#475569' }} onClick={() => tog(t.id)}>{t.name}</button>
                     ))}</div>{form.teacherIds.length > 1 && <div style={{ fontSize: 10, color: '#6366f1', marginTop: 2 }}>🔗 {form.teacherIds.length} teachers</div>}</div></div>
-                <div style={FS.sec}><span style={FS.ico}>📘</span><div style={{ flex: 1 }}><label style={FS.lb}>Subject</label>
-                    <select style={FS.sel} value={form.subjectId} onChange={e => setForm({ ...form, subjectId: e.target.value })}><option value="">Select...</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
-                <div style={FS.sec}><span style={FS.ico}>🏫</span><div style={{ flex: 1 }}><label style={FS.lb}>Class</label>
-                    <select style={FS.sel} value={form.classId} onChange={e => setForm({ ...form, classId: e.target.value })}><option value="">Select...</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name}{c.section ? ' ' + c.section : ''}</option>)}</select></div></div>
+                <div style={FS.sec}><span style={FS.ico}>🤝</span><div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input type="checkbox" id="isMtg" checked={form.isMeeting} onChange={e => setForm({ ...form, isMeeting: e.target.checked })} />
+                    <label htmlFor="isMtg" style={{ ...FS.lb, margin: 0, cursor: 'pointer' }}>Is this a Meeting/Event? (No specific subject/class)</label>
+                </div></div>
+
+                {form.isMeeting ? (
+                    <div style={FS.sec}><span style={FS.ico}>📝</span><div style={{ flex: 1 }}><label style={FS.lb}>Meeting Title</label>
+                        <input style={FS.inp} value={form.title || ''} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g Staff Alignment" /></div></div>
+                ) : (
+                    <>
+                        <div style={FS.sec}><span style={FS.ico}>📘</span><div style={{ flex: 1 }}><label style={FS.lb}>Subject</label>
+                            <select style={FS.sel} value={form.subjectId || ''} onChange={e => setForm({ ...form, subjectId: e.target.value })}><option value="">Select...</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
+                        <div style={FS.sec}><span style={FS.ico}>🏫</span><div style={{ flex: 1 }}><label style={FS.lb}>Class(es)</label>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>{classes.map(c => (
+                                <button key={c.id} style={{ ...FS.chip, background: form.classIds.includes(c.id) ? '#4f46e5' : '#f1f5f9', color: form.classIds.includes(c.id) ? '#fff' : '#475569' }} onClick={() => togC(c.id)}>{c.name}{c.section ? ' ' + c.section : ''}</button>
+                            ))}</div></div></div>
+                    </>
+                )}
                 <div style={FS.sec}><span style={FS.ico}>📊</span><div style={{ flex: 1, display: 'flex', gap: 12 }}>
                     <label style={{ ...FS.lb, flex: 1 }}>Count/wk<input style={FS.inp} type="number" min={1} max={10} value={form.count} onChange={e => setForm({ ...form, count: +e.target.value || 1 })} /></label>
                     <label style={{ ...FS.lb, flex: 1 }}>Length<select style={FS.sel} value={form.length} onChange={e => setForm({ ...form, length: +e.target.value || 1 })}><option value={1}>Single</option><option value={2}>Double</option><option value={3}>Triple</option></select></label>
@@ -89,14 +113,14 @@ function LessonsDialog({ open, onClose, onRefresh }) {
             </div>) : (<>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <select style={{ ...FS.sel, maxWidth: 180 }} value={filterClass} onChange={e => setFilterClass(e.target.value)}><option value="">All Classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-                    <div style={{ flex: 1 }} /><button style={FS.btnS} onClick={imp}>📥 Import</button><button style={FS.btnG} onClick={() => setForm({ subjectId: '', classId: '', teacherIds: [], count: 1, length: 1, roomType: '' })}>＋ New</button>
+                    <div style={{ flex: 1 }} /><button style={FS.btnS} onClick={imp}>📥 Import</button><button style={FS.btnG} onClick={() => setForm({ subjectId: '', classIds: [], teacherIds: [], count: 1, length: 1, roomType: '', isMeeting: false, title: '' })}>＋ New</button>
                 </div>
                 {loading ? <div style={{ textAlign: 'center', padding: 30 }}><div className="spinner" /></div> :
                     <table style={FS.tbl}><thead><tr><th style={FS.th}></th><th style={FS.th}>Subject</th><th style={FS.th}>Teacher</th><th style={FS.th}>Class</th><th style={FS.th}>Cnt</th><th style={FS.th}>Len</th><th style={FS.th}></th></tr></thead>
-                        <tbody>{filtered.map(l => <tr key={l.id}><td style={FS.td}><div style={{ width: 10, height: 10, borderRadius: 2, background: l.subject?.color || hc(l.subject?.name || '') }} /></td>
-                            <td style={FS.td}><strong>{l.subject?.name}</strong></td><td style={FS.td}>{l.teachers?.map(t => t.teacher?.name).join(', ')}</td>
-                            <td style={FS.td}>{l.class?.name}</td><td style={FS.td}>{l.count}</td><td style={FS.td}>{l.length === 1 ? 'S' : l.length === 2 ? 'D' : 'T'}</td>
-                            <td style={FS.td}><button style={FS.sm} onClick={() => setForm({ ...l, teacherIds: l.teachers?.map(t => t.teacherId) || [] })}>✏️</button><button style={{ ...FS.sm, color: '#dc2626' }} onClick={() => del(l.id)}>🗑</button></td>
+                        <tbody>{filtered.map(l => <tr key={l.id}><td style={FS.td}><div style={{ width: 10, height: 10, borderRadius: 2, background: l.subject?.color || hc(l.subject?.name || l.title || '') }} /></td>
+                            <td style={FS.td}><strong>{l.subject?.name || l.title || 'Meeting'}</strong></td><td style={FS.td}>{l.teachers?.map(t => t.teacher?.name).join(', ')}</td>
+                            <td style={FS.td}>{l.classes?.map(c => c.class?.name).join(', ') || '-'}</td><td style={FS.td}>{l.count}</td><td style={FS.td}>{l.length === 1 ? 'S' : l.length === 2 ? 'D' : 'T'}</td>
+                            <td style={FS.td}><button style={FS.sm} onClick={() => setForm({ ...l, teacherIds: l.teachers?.map(t => t.teacherId) || [], classIds: l.classes?.map(c => c.classId) || [], isMeeting: !l.subjectId })}>✏️</button><button style={{ ...FS.sm, color: '#dc2626' }} onClick={() => del(l.id)}>🗑</button></td>
                         </tr>)}{filtered.length === 0 && <tr><td colSpan={7} style={{ ...FS.td, textAlign: 'center', color: '#94a3b8' }}>No lessons</td></tr>}</tbody></table>}
             </>)}
         </Modal>);
@@ -256,11 +280,11 @@ function ExportDialog({ open, onClose, classes, teachers, rooms, slots, activeDa
                                         return (
                                             <td key={p.id} style={{ border: '1px solid #000', padding: 4, textAlign: 'center', height: 60, verticalAlign: 'middle' }}>
                                                 {slot ? <>
-                                                    <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}>{slot.subject?.abbreviation || slot.subject?.name || ''}</div>
+                                                    <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}>{slot.subject?.abbreviation || slot.subject?.name || slot.title || 'Meeting'}</div>
                                                     <div style={{ fontSize: 10 }}>
-                                                        {reportType !== 'teacher' && <span>{slot.teacher?.name || ''} </span>}
-                                                        {reportType !== 'room' && <span>{slot.room?.name || ''}</span>}
-                                                        {reportType !== 'class' && <span>{slot.class?.name || ''}</span>}
+                                                        {reportType !== 'teacher' && <span>{slot.teachers?.map(t => t.teacher?.name).join(', ') || ''} </span>}
+                                                        {reportType !== 'room' && <span>{slot.room?.name || ''} </span>}
+                                                        {reportType !== 'class' && <span>{slot.classes?.map(c => `${c.class?.name}${c.class?.section ? ' ' + c.class.section : ''}`).join(', ') || ''}</span>}
                                                     </div>
                                                 </> : null}
                                             </td>
@@ -544,13 +568,29 @@ export default function TimetablePage() {
 
     // Grid
     const nonBreak = useMemo(() => [...periods].filter(p => !p.isBreak).sort((a, b) => a.number - b.number), [periods]);
-    const slotMap = useMemo(() => { const m = {}; for (const s of slots) { m[`c-${s.classId}-${s.dayOfWeek}-${s.periodId}`] = s; m[`t-${s.teacherId}-${s.dayOfWeek}-${s.periodId}`] = s; if (s.roomId) m[`r-${s.roomId}-${s.dayOfWeek}-${s.periodId}`] = s; } return m }, [slots]);
+    const slotMap = useMemo(() => {
+        const m = {};
+        for (const s of slots) {
+            if (s.classes) s.classes.forEach(c => m[`c-${c.classId}-${s.dayOfWeek}-${s.periodId}`] = s);
+            if (s.teachers) s.teachers.forEach(t => m[`t-${t.teacherId}-${s.dayOfWeek}-${s.periodId}`] = s);
+            if (s.roomId) m[`r-${s.roomId}-${s.dayOfWeek}-${s.periodId}`] = s;
+        }
+        return m;
+    }, [slots]);
     const gridRows = useMemo(() => {
         if (activeTab === 'classes') return classes.map(c => ({ id: c.id, label: `${c.name}${c.section ? ' ' + c.section : ''}`, pk: 'c', grade: c.grade }));
         if (activeTab === 'teachers') return teachers.map(t => ({ id: t.id, label: t.name, pk: 't' }));
         if (activeTab === 'rooms') return rooms.map(r => ({ id: r.id, label: r.name, pk: 'r' }));
         if (activeTab === 'my' && isTeacher) return [{ id: user.id, label: 'My Schedule', pk: 't' }];
-        const seen = new Set(); const rows = []; for (const s of slots) { if (!seen.has(s.classId)) { seen.add(s.classId); rows.push({ id: s.classId, label: s.class?.name || 'Class', pk: 'c', grade: s.class?.grade }) } }
+        const seen = new Set(); const rows = [];
+        for (const s of slots) {
+            if (s.classes) s.classes.forEach(c => {
+                if (!seen.has(c.classId)) {
+                    seen.add(c.classId);
+                    rows.push({ id: c.classId, label: c.class?.name || 'Class', pk: 'c', grade: c.class?.grade });
+                }
+            });
+        }
         return rows.length > 0 ? rows : [{ id: user.id, label: 'My Schedule', pk: 'c' }];
     }, [activeTab, classes, teachers, rooms, user, isTeacher, slots]);
 
@@ -650,11 +690,11 @@ export default function TimetablePage() {
                                             const dayActive = isDayActiveForRow(row, d);
                                             if (!dayActive) return <td key={`${d}-${p.id}`} style={P.cellOff}><div style={{ background: '#f1f5f9', height: '100%', borderRadius: 2 }} /></td>;
                                             const slot = slotMap[`${row.pk}-${row.id}-${d}-${p.id}`];
-                                            const bg = slot ? (slot.subject?.color || hc(slot.subject?.name || '')) : undefined;
+                                            const bg = slot ? (slot.subject?.color || hc(slot.subject?.name || slot.title || '')) : undefined;
                                             return <td key={`${d}-${p.id}`} style={P.cell}>
                                                 {slot ? <div className="tt-tooltip" style={P.chip(bg)}
                                                     onClick={() => slot.lessonPlan?.id && navigate(`/lesson-plans/${slot.lessonPlan.id}`)}>
-                                                    <span style={{ fontWeight: 800, fontSize: 9, lineHeight: '11px' }}>{(slot.subject?.abbreviation || slot.subject?.code || slot.subject?.name || '').substring(0, 4)}</span>
+                                                    <span style={{ fontWeight: 800, fontSize: 9, lineHeight: '11px' }}>{(slot.subject?.abbreviation || slot.subject?.code || slot.subject?.name || slot.title || '').substring(0, 4)}</span>
 
                                                     <div className="tt-tooltip-content">
                                                         <div className="tt-detail-row">
@@ -667,15 +707,15 @@ export default function TimetablePage() {
                                                         <div className="tt-detail-row">
                                                             <span className="material-icons-outlined tt-detail-icon">subject</span>
                                                             <div>
-                                                                <div className="tt-detail-label">Subject</div>
-                                                                <div className="tt-detail-value">{slot.subject?.name}</div>
+                                                                <div className="tt-detail-label">Subject / Title</div>
+                                                                <div className="tt-detail-value">{slot.subject?.name || slot.title || 'Meeting'}</div>
                                                             </div>
                                                         </div>
                                                         <div className="tt-detail-row">
                                                             <span className="material-icons-outlined tt-detail-icon">person</span>
                                                             <div>
-                                                                <div className="tt-detail-label">Teacher</div>
-                                                                <div className="tt-detail-value">{slot.teacher?.name}</div>
+                                                                <div className="tt-detail-label">Teacher(s)</div>
+                                                                <div className="tt-detail-value">{slot.teachers?.map(t => t.teacher?.name).join(', ') || 'None'}</div>
                                                             </div>
                                                         </div>
                                                         <div className="tt-detail-row">
@@ -688,8 +728,8 @@ export default function TimetablePage() {
                                                         <div className="tt-detail-row">
                                                             <span className="material-icons-outlined tt-detail-icon">groups</span>
                                                             <div>
-                                                                <div className="tt-detail-label">Class</div>
-                                                                <div className="tt-detail-value">{slot.class?.name} {slot.class?.section || ''}</div>
+                                                                <div className="tt-detail-label">Class(es)</div>
+                                                                <div className="tt-detail-value">{slot.classes?.map(c => `${c.class?.name}${c.class?.section ? ' ' + c.class.section : ''}`).join(', ') || 'None'}</div>
                                                             </div>
                                                         </div>
                                                     </div>

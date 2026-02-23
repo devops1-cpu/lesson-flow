@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import apiService from '../services/api';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API = '/api';
 function api(p, o = {}) { const t = localStorage.getItem('token'); return fetch(`${API}${p}`, { ...o, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}`, ...o.headers } }).then(r => r.json()) }
 
 const sectionColors = ['#1a73e8', '#01796f', '#137333', '#e37400', '#8430ce', '#d93025', '#007b83', '#3f51b5', '#e91e63', '#009688'];

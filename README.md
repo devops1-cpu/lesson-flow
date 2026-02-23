@@ -43,11 +43,12 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lesson_planner?schem
 ```bash
 cd server
 npm install
-npx prisma db push      # Creates tables
-node prisma/seed.js      # Seeds demo data
-npm run dev              # Starts API on http://localhost:3001
+npx prisma migrate dev --name init
+node prisma/seed.js
+npm run dev            # Starts API on http://localhost:3001
 ```
-
+npx prisma migrate dev
+npx prisma generate
 ### 4. Setup Frontend
 
 ```bash

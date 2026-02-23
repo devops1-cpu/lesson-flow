@@ -1,4 +1,6 @@
 const prisma = require('../config/prisma.js');
+const { v4: uuidv4 } = require('uuid');
+
 /**
  * schedulerService.js
  * Constraint-based auto-scheduling engine using TimetableLesson entities.
@@ -67,12 +69,12 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
         roomsByType[room.type].push(room);
     }
 
-    // 3. Load TimetableLessons with teachers
+    // 3. Load TimetableLessons with teachers and classes
     addStep('Loading lesson configurations...');
     const lessons = await prisma.timetableLesson.findMany({
         include: {
             subject: { select: { id: true, name: true, code: true } },
-            class: { select: { id: true, name: true, section: true } },
+            classes: { include: { class: { select: { id: true, name: true, section: true } } } },
             teachers: { include: { teacher: { select: { id: true, name: true } } } }
         }
     });
@@ -98,7 +100,9 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
     // 5. Schedule
     addStep('Scheduling lessons...');
 
-    const placed = [];
+    const placedSlots = [];
+    const placedClasses = [];
+    const placedTeachers = [];
     const conflicts = [];
 
     // Occupancy trackers
@@ -109,8 +113,8 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
 
     // Sort lessons: harder to place first (longer lessons, more teachers, specific room needs)
     const sortedLessons = [...lessons].sort((a, b) => {
-        const scoreA = a.length * 3 + a.teachers.length * 2 + (a.roomType ? 1 : 0);
-        const scoreB = b.length * 3 + b.teachers.length * 2 + (b.roomType ? 1 : 0);
+        const scoreA = a.length * 3 + a.teachers.length * 2 + a.classes.length * 1 + (a.roomType ? 1 : 0);
+        const scoreB = b.length * 3 + b.teachers.length * 2 + b.classes.length * 1 + (b.roomType ? 1 : 0);
         return scoreB - scoreA; // Hardest first
     });
 
@@ -119,7 +123,14 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
 
     for (const lesson of sortedLessons) {
         const teacherIds = lesson.teachers.map(lt => lt.teacherId);
-        const requiredRoomType = getRequiredRoomType(lesson.subject.name, lesson.roomType);
+        const classIds = lesson.classes.map(lc => lc.classId);
+
+        const subjectName = lesson.subject?.name || '';
+        const requiredRoomType = getRequiredRoomType(subjectName, lesson.roomType);
+
+        const lessonIdentifier = subjectName || lesson.title || 'Meeting';
+        const classNames = lesson.classes.map(c => c.class.name).join(', ') || 'No Classes';
+
         let slotsPlaced = 0;
 
         for (let attempt = 0; attempt < lesson.count; attempt++) {
@@ -130,16 +141,16 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
                 if (found) break;
 
                 // Avoid same subject twice on same day for this class IF count <= activeDays
-                const dayKey = `${lesson.classId}-${lesson.subjectId}-${day}`;
+                const dayKeys = classIds.map(cid => `${cid}-${lesson.subjectId || lesson.title}-${day}`);
 
-                // If the user wants more lesson occurrences than there are active days, 
-                // we MUST allow them to occur multiple times on some days. 
-                // We keep track of how many times it has occurred on this day.
-                const countOnDay = subjectDayTracker.get(dayKey) || 0;
-
-                // Allow up to Math.ceil(lesson.count / activeDays.length) occurrences per day
                 const maxPerDay = Math.max(1, Math.ceil(lesson.count / activeDays.length));
-                if (countOnDay >= maxPerDay) continue;
+                let tooManyForSomeClass = false;
+                for (const dk of dayKeys) {
+                    if ((subjectDayTracker.get(dk) || 0) >= maxPerDay) {
+                        tooManyForSomeClass = true; break;
+                    }
+                }
+                if (tooManyForSomeClass) continue;
 
                 // Find a sequence of consecutive periods of the right length
                 for (let pi = 0; pi <= periods.length - lesson.length; pi++) {
@@ -150,12 +161,15 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
 
                     // Check all periods in the sequence
                     for (const p of periodSlice) {
-                        // Class free?
-                        if (classOccupied.has(`${lesson.classId}-${day}-${p.id}`)) { canPlace = false; break; }
-                        if (unavailableClass.has(`${lesson.classId}-${day}-${p.id}`)) { canPlace = false; break; }
+                        // Classes free?
+                        for (const cid of classIds) {
+                            if (classOccupied.has(`${cid}-${day}-${p.id}`)) { canPlace = false; break; }
+                            if (unavailableClass.has(`${cid}-${day}-${p.id}`)) { canPlace = false; break; }
+                        }
+                        if (!canPlace) break;
 
                         // Subject free? (Time off constraint)
-                        if (unavailableSubject.has(`${lesson.subjectId}-${day}-${p.id}`)) { canPlace = false; break; }
+                        if (lesson.subjectId && unavailableSubject.has(`${lesson.subjectId}-${day}-${p.id}`)) { canPlace = false; break; }
 
                         // All teachers free?
                         for (const tid of teacherIds) {
@@ -189,24 +203,34 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
 
                     // Place all periods in the sequence
                     for (const p of periodSlice) {
-                        classOccupied.add(`${lesson.classId}-${day}-${p.id}`);
+                        const slotId = uuidv4();
+
+                        for (const cid of classIds) {
+                            classOccupied.add(`${cid}-${day}-${p.id}`);
+                            placedClasses.push({ id: uuidv4(), slotId, classId: cid });
+                        }
+
                         for (const tid of teacherIds) {
                             teacherOccupied.add(`${tid}-${day}-${p.id}`);
+                            placedTeachers.push({ id: uuidv4(), slotId, teacherId: tid });
                         }
+
                         if (selectedRoom) roomOccupied.add(`${selectedRoom.id}-${day}-${p.id}`);
 
-                        // Use first teacher for slot (primary teacher)
-                        placed.push({
+                        placedSlots.push({
+                            id: slotId,
                             dayOfWeek: day,
                             periodId: p.id,
-                            classId: lesson.classId,
-                            teacherId: teacherIds[0],
-                            subjectId: lesson.subjectId,
+                            subjectId: lesson.subjectId || null,
+                            title: lesson.title || null,
                             roomId: selectedRoom?.id || null
                         });
                     }
 
-                    subjectDayTracker.set(dayKey, (subjectDayTracker.get(dayKey) || 0) + 1);
+                    for (const dk of dayKeys) {
+                        subjectDayTracker.set(dk, (subjectDayTracker.get(dk) || 0) + 1);
+                    }
+
                     slotsPlaced++;
                     found = true;
                 }
@@ -217,8 +241,8 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
             conflicts.push({
                 type: 'insufficient_slots',
                 lesson: {
-                    subject: lesson.subject.name,
-                    class: lesson.class.name,
+                    subject: lessonIdentifier,
+                    class: classNames,
                     teachers: lesson.teachers.map(t => t.teacher.name).join(', ')
                 },
                 needed: lesson.count,
@@ -226,20 +250,26 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
             });
         }
 
-        addStep(`Placed ${lesson.subject.name} for ${lesson.class.name} (${slotsPlaced}/${lesson.count})`);
+        addStep(`Placed ${lessonIdentifier} for ${classNames} (${slotsPlaced}/${lesson.count})`);
     }
 
     // 6. Batch insert
     addStep('Saving timetable to database...');
-    if (placed.length > 0) {
-        await prisma.timetableSlot.createMany({ data: placed, skipDuplicates: true });
+    if (placedSlots.length > 0) {
+        await prisma.timetableSlot.createMany({ data: placedSlots, skipDuplicates: true });
+        if (placedClasses.length > 0) {
+            await prisma.slotClass.createMany({ data: placedClasses, skipDuplicates: true });
+        }
+        if (placedTeachers.length > 0) {
+            await prisma.slotTeacher.createMany({ data: placedTeachers, skipDuplicates: true });
+        }
     }
 
     addStep('Timetable generation complete!');
 
     return {
         success: true,
-        totalPlaced: placed.length,
+        totalPlaced: placedSlots.length,
         totalConflicts: conflicts.length,
         conflicts,
         steps,
@@ -248,9 +278,10 @@ async function autoGenerate({ clearExisting = false, activeDays = ['MONDAY', 'TU
             periodsPerDay: periods.length,
             daysPerWeek: activeDays.length,
             roomsAvailable: rooms.length,
-            totalSlotsCreated: placed.length
+            totalSlotsCreated: placedSlots.length
         }
     };
 }
 
 module.exports = { autoGenerate };
+

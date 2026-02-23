@@ -48,7 +48,7 @@ function App() {
             <main className="app-main">
                 <Routes>
                     <Route path="/public-timetable" element={<PublicTimetablePage />} />
-                    <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                    <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                     <Route path="/lesson-plans" element={<ProtectedRoute><LessonPlansPage /></ProtectedRoute>} />
                     <Route path="/lesson-plans/:id" element={<ProtectedRoute><LessonPlanDetail /></ProtectedRoute>} />
                     <Route path="/lesson-plans/assign" element={<ProtectedRoute><AssignLessonPlans /></ProtectedRoute>} />

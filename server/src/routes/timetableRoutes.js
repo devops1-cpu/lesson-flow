@@ -7,8 +7,8 @@ const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'
 
 const slotIncludes = {
     period: true,
-    class: { select: { id: true, name: true, section: true, grade: true } },
-    teacher: { select: { id: true, name: true, avatar: true } },
+    classes: { include: { class: { select: { id: true, name: true, section: true, grade: true } } } },
+    teachers: { include: { teacher: { select: { id: true, name: true, avatar: true } } } },
     subject: { select: { id: true, name: true, code: true } },
     room: { select: { id: true, name: true, type: true } }
 };
@@ -17,7 +17,7 @@ const slotIncludes = {
 router.get('/class/:classId', authenticate, async (req, res) => {
     try {
         const slots = await prisma.timetableSlot.findMany({
-            where: { classId: req.params.classId },
+            where: { classes: { some: { classId: req.params.classId } } },
             include: slotIncludes,
             orderBy: [{ dayOfWeek: 'asc' }, { period: { number: 'asc' } }]
         });
@@ -33,7 +33,7 @@ router.get('/class/:classId', authenticate, async (req, res) => {
 router.get('/teacher/:teacherId', authenticate, async (req, res) => {
     try {
         const slots = await prisma.timetableSlot.findMany({
-            where: { teacherId: req.params.teacherId },
+            where: { teachers: { some: { teacherId: req.params.teacherId } } },
             include: slotIncludes,
             orderBy: [{ dayOfWeek: 'asc' }, { period: { number: 'asc' } }]
         });
@@ -62,7 +62,7 @@ router.get('/my', authenticate, async (req, res) => {
             teacherId = req.user.id;
         }
 
-        const whereClause = teacherId ? { teacherId } : { classId: { in: classIds } };
+        const whereClause = teacherId ? { teachers: { some: { teacherId } } } : { classes: { some: { classId: { in: classIds } } } };
 
         const slots = await prisma.timetableSlot.findMany({
             where: whereClause,
@@ -115,8 +115,8 @@ router.get('/public', async (req, res) => {
         const slots = await prisma.timetableSlot.findMany({
             include: {
                 period: true,
-                class: { select: { id: true, name: true, section: true, grade: true } },
-                teacher: { select: { id: true, name: true } },
+                classes: { include: { class: { select: { id: true, name: true, section: true, grade: true } } } },
+                teachers: { include: { teacher: { select: { id: true, name: true } } } },
                 subject: { select: { id: true, name: true, code: true, color: true } },
                 room: { select: { id: true, name: true } }
             },
@@ -172,10 +172,10 @@ router.get('/all', authenticate, requireRole('ADMIN', 'HOD'), async (req, res) =
 // ─── Create or update a slot (Admin only) ───
 router.post('/slots', authenticate, requireRole('ADMIN'), async (req, res) => {
     try {
-        const { dayOfWeek, periodId, classId, teacherId, subjectId, roomId, lessonPlanId } = req.body;
+        const { dayOfWeek, periodId, classIds, teacherIds, subjectId, roomId, title, lessonPlanId } = req.body;
 
-        if (!dayOfWeek || !periodId || !classId || !teacherId || !subjectId) {
-            return res.status(400).json({ error: 'dayOfWeek, periodId, classId, teacherId, and subjectId are required.' });
+        if (!dayOfWeek || !periodId || (!classIds?.length && !title) || !teacherIds?.length) {
+            return res.status(400).json({ error: 'dayOfWeek, periodId, teacherIds, and classIds (or title) are required.' });
         }
 
         // Check period is not a break
@@ -185,7 +185,18 @@ router.post('/slots', authenticate, requireRole('ADMIN'), async (req, res) => {
         }
 
         const slot = await prisma.timetableSlot.create({
-            data: { dayOfWeek, periodId, classId, teacherId, subjectId, roomId: roomId || null },
+            data: {
+                dayOfWeek, periodId,
+                subjectId: subjectId || null,
+                roomId: roomId || null,
+                title: title || null,
+                classes: {
+                    create: (classIds || []).map(cid => ({ classId: cid }))
+                },
+                teachers: {
+                    create: (teacherIds || []).map(tid => ({ teacherId: tid }))
+                }
+            },
             include: slotIncludes
         });
         res.status(201).json(slot);
@@ -219,7 +230,7 @@ router.patch('/slots/:id/link', authenticate, requireRole('ADMIN', 'TEACHER'), a
         const { lessonPlanId, date } = req.body;
         if (!date) return res.status(400).json({ error: 'Date is required for assignment.' });
 
-        const slot = await prisma.timetableSlot.findUnique({ where: { id: req.params.id } });
+        const slot = await prisma.timetableSlot.findUnique({ where: { id: req.params.id }, include: { classes: true } });
         if (!slot) return res.status(404).json({ error: 'Slot not found.' });
 
         const assignment = await prisma.timetableAssignment.upsert({
@@ -233,7 +244,7 @@ router.patch('/slots/:id/link', authenticate, requireRole('ADMIN', 'TEACHER'), a
             create: {
                 date: new Date(date),
                 slotId: slot.id,
-                classId: slot.classId,
+                classId: req.body.classId || slot.classes[0]?.classId,
                 lessonPlanId
             },
             include: { lessonPlan: { select: { id: true, title: true, status: true, subject: true, grade: true } } }
@@ -258,17 +269,19 @@ router.get('/conflicts', authenticate, requireRole('ADMIN'), async (req, res) =>
         const seen = {};
 
         for (const slot of allSlots) {
-            const teacherKey = `teacher-${slot.teacherId}-${slot.dayOfWeek}-${slot.periodId}`;
-            const classKey = `class-${slot.classId}-${slot.dayOfWeek}-${slot.periodId}`;
-            const roomKey = slot.roomId ? `room-${slot.roomId}-${slot.dayOfWeek}-${slot.periodId}` : null;
+            for (const t of slot.teachers) {
+                const teacherKey = `teacher-${t.teacherId}-${slot.dayOfWeek}-${slot.periodId}`;
+                if (seen[teacherKey]) {
+                    conflicts.push({ type: 'teacher_overlap', slotA: seen[teacherKey], slotB: slot });
+                } else { seen[teacherKey] = slot; }
+            }
 
-            if (seen[teacherKey]) {
-                conflicts.push({ type: 'teacher_overlap', slotA: seen[teacherKey], slotB: slot });
-            } else { seen[teacherKey] = slot; }
-
-            if (seen[classKey]) {
-                conflicts.push({ type: 'class_overlap', slotA: seen[classKey], slotB: slot });
-            } else { seen[classKey] = slot; }
+            for (const c of slot.classes) {
+                const classKey = `class-${c.classId}-${slot.dayOfWeek}-${slot.periodId}`;
+                if (seen[classKey]) {
+                    conflicts.push({ type: 'class_overlap', slotA: seen[classKey], slotB: slot });
+                } else { seen[classKey] = slot; }
+            }
 
             if (roomKey && seen[roomKey]) {
                 conflicts.push({ type: 'room_overlap', slotA: seen[roomKey], slotB: slot });
@@ -301,10 +314,10 @@ router.get('/lessons', authenticate, requireRole('ADMIN', 'HOD'), async (req, re
         const lessons = await prisma.timetableLesson.findMany({
             include: {
                 subject: { select: { id: true, name: true, code: true, color: true } },
-                class: { select: { id: true, name: true, grade: true, section: true } },
+                classes: { include: { class: { select: { id: true, name: true, grade: true, section: true } } } },
                 teachers: { include: { teacher: { select: { id: true, name: true, email: true } } } }
             },
-            orderBy: [{ class: { grade: 'asc' } }, { class: { section: 'asc' } }]
+            orderBy: [{ createdAt: 'desc' }] // Better than sorting strictly by class if some don't have classes
         });
         res.json(lessons);
     } catch (error) {
@@ -315,15 +328,15 @@ router.get('/lessons', authenticate, requireRole('ADMIN', 'HOD'), async (req, re
 // Create/Update lesson configuration
 router.post('/lessons', authenticate, requireRole('ADMIN', 'HOD'), async (req, res) => {
     try {
-        const { id, subjectId, classId, count, length, roomType, teacherIds } = req.body;
+        const { id, subjectId, classIds, count, length, roomType, teacherIds, title } = req.body;
 
-        if (!subjectId || !classId) {
-            return res.status(400).json({ error: 'Subject and Class are required.' });
+        if ((!subjectId && !title) || (!classIds?.length && !title)) {
+            return res.status(400).json({ error: 'Subject and Class, or meeting title, are required.' });
         }
 
         const data = {
-            subjectId,
-            classId,
+            subjectId: subjectId || null,
+            title: title || null,
             count: parseInt(count) || 1,
             length: parseInt(length) || 1,
             roomType: roomType || null,
@@ -336,23 +349,30 @@ router.post('/lessons', authenticate, requireRole('ADMIN', 'HOD'), async (req, r
                 where: { id },
                 data: {
                     ...data,
+                    classes: {
+                        deleteMany: {},
+                        create: (classIds || []).map(cid => ({ classId: cid }))
+                    },
                     teachers: {
                         deleteMany: {},
                         create: (teacherIds || []).map(tid => ({ teacherId: tid }))
                     }
                 },
-                include: { teachers: true }
+                include: { teachers: true, classes: true }
             });
         } else {
             // Create New
             lesson = await prisma.timetableLesson.create({
                 data: {
                     ...data,
+                    classes: {
+                        create: (classIds || []).map(cid => ({ classId: cid }))
+                    },
                     teachers: {
                         create: (teacherIds || []).map(tid => ({ teacherId: tid }))
                     }
                 },
-                include: { teachers: true }
+                include: { teachers: true, classes: true }
             });
         }
         res.json(lesson);
