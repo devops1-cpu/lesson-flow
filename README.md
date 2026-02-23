@@ -45,10 +45,11 @@ cd server
 npm install
 npx prisma migrate dev --name init
 node prisma/seed.js
-npm run dev            # Starts API on http://localhost:3001
-```
+npm run dev         
+
 npx prisma migrate dev
 npx prisma generate
+```
 ### 4. Setup Frontend
 
 ```bash
