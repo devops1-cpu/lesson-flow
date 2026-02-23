@@ -41,8 +41,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL 
 });
 
-// Vercel: export app
-module.exports = app;
+
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -83,3 +82,4 @@ if (require.main === module) {
 }
 
 module.exports = app;
+
