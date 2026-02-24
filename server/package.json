@@ -7,10 +7,12 @@
     "node": ">=24.13.0"
   },
   "scripts": {
-    "dev": "nodemon api/index.js",
     "start": "node api/index.js",
-    "build": "npm run vercel-build",
-    "vercel-build": "prisma generate && prisma migrate deploy",
+    "dev": "nodemon api/index.js",
+    "seed": "node prisma/seed.js",
+    "migrate": "npx prisma migrate deploy",
+    "generate": "npx prisma generate",
+    "build": "prisma generate && prisma migrate deploy",
     "postinstall": "prisma generate"
   },
   "keywords": [],
