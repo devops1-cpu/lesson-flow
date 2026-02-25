@@ -7,6 +7,7 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+server.log
 
 # OS files
 .DS_Store
@@ -14,46 +15,78 @@ Thumbs.db
 __MACOSX/
 
 # ======================
-# Node modules (client & server)
+# Node modules (NEVER commit)
 # ======================
 node_modules/
 **/node_modules/
+client/node_modules/
+server/node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # ======================
-# Environment files (keep secrets safe)
+# Environment files (KEEP SECRETS PRIVATE - Never commit)
 # ======================
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.production.local
+.env*
+.env*.local
+!.env.example
+
+# ⚠️ IMPORTANT: .env.production should be added locally via scp to EC2
+# Do NOT commit production credentials to Git
 
 # ======================
-# Client (frontend) specific
+# Build outputs
 # ======================
 client/dist/
-client/.env
-client/.vite/
+client/build/
+server/dist/
+server/build/
 
 # ======================
-# Server (backend) specific
-# ======================
-server/node_modules/
-server/.env
-server/prisma/migrations/
-server/uploads/
-
-# Ignore generated Prisma client files if any
-server/prisma/generated/
-
-# ======================
-# IDE/editor folders
+# IDE/Editor
 # ======================
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.sublime-project
+.sublime-workspace
 
-node_modules
+# ======================
+# Testing
+# ======================
+coverage/
+.nyc_output/
+*.lcov
 
-client/node_modules
-client/node_modules/*
+# ======================
+# Temporary files
+# ======================
+tmp/
+temp/
+*.tmp
 
-server/node_modules
-server/node_modules/*
+# ======================
+# Database (local development)
+# ======================
+*.db
+*.sqlite
+*.sqlite3
+
+# ======================
+# Uploads (server-side)
+# ======================
+server/uploads/
+
+# ======================
+# Prisma
+# ======================
+prisma/migrations/ # Optional: depend on your workflow
+.prisma/

@@ -1,42 +1,54 @@
-# LessonFlow — Teaching & Learning Platform
+# Lesson Flow - PERN Stack Application
 
-A modern, full-stack teaching and learning platform for digitalized lesson planning, inspired by Google Classroom.
+A comprehensive lesson planning and class management application built with PostgreSQL, Express, React, and Node.js.
+
+## 🚀 Quick Start - Deployment
+
+**[👉 See DEPLOYMENT.md for complete AWS deployment guide](DEPLOYMENT.md)**
+
+All deployment instructions in one file:
+- Create RDS database
+- Setup EC2 instance  
+- Deploy application
+- Troubleshooting
+
+## 🛠 Local Development
+
+```bash
+# Backend
+cd server
+npm install
+npx prisma migrate dev
+npm run dev
+
+# Frontend (new terminal)
+cd client
+npm install
+npm run dev
+```
+
+Visit http://localhost:5173
+
+## 📚 Features
+
+- Lesson plan management
+- User & class management
+- Analytics & reporting
+- Timetable scheduling
+- OCR document processing
+- AI-powered tutoring
+- Readiness assessments
 
 ## Tech Stack
 
-- **Frontend**: React 18, Vite, React Router, Axios
-- **Backend**: Node.js, Express.js
-- **Database**: PostgreSQL, Prisma ORM
-- **Auth**: JWT (jsonwebtoken + bcryptjs)
+- Frontend: React 18 + Vite
+- Backend: Node.js + Express
+- Database: PostgreSQL + Prisma
+- Deployment: AWS EC2 + RDS + Nginx + PM2
 
-## Prerequisites
+## License
 
-- Node.js 18+
-- PostgreSQL (running locally on port 5432)
-
-## Setup Instructions
-
-### 1. Start PostgreSQL
-
-Make sure PostgreSQL is running. Create the database:
-
-```bash
-createdb lesson_planner
-```
-
-Or via `psql`:
-
-```sql
-CREATE DATABASE lesson_planner;
-```
-
-### 2. Configure Environment
-
-Edit `server/.env` if your PostgreSQL credentials differ from defaults:
-
-```
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lesson_planner?schema=public"
-```
+ISC
 
 ### 3. Setup Backend
 
