@@ -71,6 +71,16 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Also accept /health (some proxies may strip the /api prefix)
+app.get('/health', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT 1');
+    res.json({ status: 'ok', db: 'connected', rows: result.rows.length });
+  } catch (error) {
+    res.status(500).json({ status: 'error', db: 'failed' });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

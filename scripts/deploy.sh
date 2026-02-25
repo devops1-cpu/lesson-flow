@@ -25,7 +25,8 @@ echo "Repository: $REPO"
 echo "=========================================="
 
 # SSH into EC2 and run deployment
-ssh -o StrictHostKeyChecking=no ec2-user@$EC2_IP << 'DEPLOY_SCRIPT'
+# Run remote bash with REPO and EC2_IP exported so remote can access them.
+ssh -i LessonPlanKey.pem -o StrictHostKeyChecking=no ec2-user@$EC2_IP "REPO='$REPO' EC2_IP='$EC2_IP' bash -s" << 'DEPLOY_SCRIPT'
 
 set -e
 echo "Starting deployment..."
@@ -39,7 +40,7 @@ if [ -d ".git" ]; then
     git pull origin main
 else
     echo "✓ Cloning repository..."
-    git clone $REPO .
+    git clone "$REPO" .
 fi
 
 # Deploy Backend
@@ -101,8 +102,8 @@ echo "=========================================="
 echo "✓ Deployment Complete!"
 echo "=========================================="
 echo ""
-echo "Your app is live at: http://$1"
-echo "API health: http://$1/api/health"
+echo "Your app is live at: http://$EC2_IP"
+echo "API health: http://$EC2_IP/api/health"
 echo ""
 echo "Check status: pm2 logs lessonflow-api"
 echo "Restart: pm2 restart lessonflow-api"
