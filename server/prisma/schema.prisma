@@ -1,3 +1,450 @@
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
+// enum Role {
+//   ADMIN
+//   HOD
+//   TEACHER
+//   STUDENT
+//   PARENT
+//   PROCESS_DEPT
+// }
+
+// enum LessonStatus {
+//   DRAFT
+//   SUBMITTED
+//   CHANGES_REQUESTED
+//   APPROVED
+//   PUBLISHED
+//   ARCHIVED
+// }
+
+// enum AvailabilityState {
+//   AVAILABLE
+//   CONDITIONAL
+//   UNAVAILABLE
+// }
+
+// model User {
+//   id        String   @id @default(uuid())
+//   name      String
+//   email     String   @unique
+//   password  String
+//   role      Role     @default(STUDENT)
+//   avatar    String?
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+
+//   // Department / HOD info
+//   departmentId String?
+//   department   Department? @relation("DeptMembers", fields: [departmentId], references: [id])
+
+//   // If user is HOD, they head a department
+//   headedDepartment Department? @relation("DepartmentHead")
+
+//   // Relations
+//   lessonPlans         LessonPlan[]          @relation("CreatedBy")
+//   approvedPlans       LessonPlan[]          @relation("ApprovedBy")
+//   classMemberships    ClassMember[]
+//   parentLinks         ParentStudent[]       @relation("Parent")
+//   childLinks          ParentStudent[]       @relation("Child")
+//   classesOwned        Class[]               @relation("ClassOwner")
+//   teacherAssignments  TeacherAssignment[]
+//   commentsMade        LessonComment[]       @relation("UserComments")
+//   slotTeachers        SlotTeacher[]
+//   teacherAvailability TeacherAvailability[] @relation("TeacherAvailability")
+//   lessonTeachers      LessonTeacher[]
+// }
+
+// model Department {
+//   id          String   @id @default(uuid())
+//   name        String   @unique
+//   description String?
+//   createdAt   DateTime @default(now())
+//   updatedAt   DateTime @updatedAt
+
+//   headId String? @unique
+//   head   User?   @relation("DepartmentHead", fields: [headId], references: [id])
+
+//   members  User[]    @relation("DeptMembers")
+//   courses  Course[]
+//   subjects Subject[]
+// }
+
+// model Subject {
+//   id           String      @id @default(uuid())
+//   name         String
+//   code         String?
+//   abbreviation String? // Short code like "M", "Eng", "PE"
+//   color        String? // Hex color for timetable display
+//   departmentId String?
+//   department   Department? @relation(fields: [departmentId], references: [id])
+
+//   teacherAssignments TeacherAssignment[]
+//   timetableSlots     TimetableSlot[]
+//   timetableLessons   TimetableLesson[]
+//   availabilities     SubjectAvailability[]
+//   createdAt          DateTime              @default(now())
+//   updatedAt          DateTime              @updatedAt
+
+//   @@unique([name, departmentId])
+// }
+
+// model Course {
+//   id           String     @id @default(uuid())
+//   name         String
+//   code         String?
+//   departmentId String
+//   department   Department @relation(fields: [departmentId], references: [id])
+
+//   classes   Class[]
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
+
+// model Class {
+//   id          String   @id @default(uuid())
+//   name        String
+//   section     String?
+//   subject     String?
+//   grade       String?
+//   description String?
+//   capacity    Int      @default(45)
+//   coverColor  String   @default("#1a73e8")
+//   createdAt   DateTime @default(now())
+//   updatedAt   DateTime @updatedAt
+
+//   // Link to Course
+//   courseId String?
+//   course   Course? @relation(fields: [courseId], references: [id])
+
+//   // Relations
+//   ownerId              String
+//   owner                User                  @relation("ClassOwner", fields: [ownerId], references: [id])
+//   members              ClassMember[]
+//   lessonPlans          LessonPlan[]
+//   slotClasses          SlotClass[]
+//   lessonClasses        LessonClass[]
+//   timetableAssignments TimetableAssignment[]
+//   availabilities       ClassAvailability[]
+//   TeacherAssignment    TeacherAssignment[]
+// }
+
+// // Teacher-Class-Subject mapping (Admin assigns teachers to classes for specific subjects)
+// model TeacherAssignment {
+//   id        String   @id @default(uuid())
+//   teacherId String
+//   classId   String
+//   subjectId String
+//   createdAt DateTime @default(now())
+
+//   teacher User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+//   class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+//   subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+//   @@unique([teacherId, classId, subjectId])
+// }
+
+// model ClassMember {
+//   id       String   @id @default(uuid())
+//   userId   String
+//   classId  String
+//   joinedAt DateTime @default(now())
+
+//   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+//   @@unique([userId, classId])
+// }
+
+// model LessonPlan {
+//   id                  String       @id @default(uuid())
+//   title               String
+//   subject             String
+//   grade               String
+//   objectives          String[]
+//   materials           String[]
+//   warmUp              String?
+//   instruction         String?
+//   guidedPractice      String?
+//   independentPractice String?
+//   closure             String?
+//   assessment          String?
+//   differentiation     String?
+//   homework            String?
+//   notes               String?
+//   status              LessonStatus @default(DRAFT)
+//   createdAt           DateTime     @default(now())
+//   updatedAt           DateTime     @updatedAt
+
+//   // Advance submission tracking
+//   advanceDaysRequired Int @default(3)
+
+//   // Approval Workflow
+//   submissionDate  DateTime?
+//   approvalDate    DateTime?
+//   approverId      String?
+//   approver        User?     @relation("ApprovedBy", fields: [approverId], references: [id])
+//   approvalComment String?
+
+//   // AI Readiness
+//   readinessAssessment ReadinessAssessment?
+//   ocrSourceUrl        String?
+
+//   // Relations
+//   teacherId            String
+//   teacher              User                  @relation("CreatedBy", fields: [teacherId], references: [id])
+//   classId              String?
+//   class                Class?                @relation(fields: [classId], references: [id])
+//   resources            Resource[]
+//   comments             LessonComment[]
+//   timetableAssignments TimetableAssignment[]
+// }
+
+// model ReadinessAssessment {
+//   id           String     @id @default(uuid())
+//   lessonPlanId String     @unique
+//   lessonPlan   LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+
+//   score           Int?
+//   feedback        String?
+//   questions       Json?
+//   answers         Json?
+//   sectionAnalysis Json? // AI critique per section
+//   status          String  @default("PENDING")
+
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
+
+// model Resource {
+//   id        String   @id @default(uuid())
+//   name      String
+//   type      String
+//   url       String
+//   createdAt DateTime @default(now())
+
+//   lessonPlanId String
+//   lessonPlan   LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+// }
+
+// model LessonComment {
+//   id     String     @id @default(uuid())
+//   planId String
+//   plan   LessonPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+//   userId String
+//   user   User       @relation("UserComments", fields: [userId], references: [id], onDelete: Cascade)
+
+//   section   String? // e.g., "objectives", "instruction", or null for general
+//   content   String
+//   createdAt DateTime @default(now())
+// }
+
+// model ParentStudent {
+//   id        String @id @default(uuid())
+//   parentId  String
+//   studentId String
+
+//   parent  User @relation("Parent", fields: [parentId], references: [id], onDelete: Cascade)
+//   student User @relation("Child", fields: [studentId], references: [id], onDelete: Cascade)
+
+//   @@unique([parentId, studentId])
+// }
+
+// // ==================== TIMETABLE LESSONS (Edupage-style) ====================
+
+// model TimetableLesson {
+//   id String @id @default(uuid())
+
+//   subjectId String?
+//   subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+//   title    String?   // For meetings or custom labels
+
+//   count    Int       @default(1) // Lessons per week
+//   length   Int       @default(1) // Periods per lesson (1=single, 2=double)
+//   roomType RoomType? // Preferred room type (null = any)
+
+//   classes  LessonClass[]
+//   teachers LessonTeacher[]
+
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
+
+// model LessonClass {
+//   id        String          @id @default(uuid())
+//   lessonId  String
+//   lesson    TimetableLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+//   classId   String
+//   class     Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+//   @@unique([lessonId, classId])
+// }
+
+// model LessonTeacher {
+//   id        String          @id @default(uuid())
+//   lessonId  String
+//   lesson    TimetableLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+//   teacherId String
+//   teacher   User            @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+//   @@unique([lessonId, teacherId])
+// }
+
+// // ==================== TIMETABLING ====================
+
+// enum DayOfWeek {
+//   MONDAY
+//   TUESDAY
+//   WEDNESDAY
+//   THURSDAY
+//   FRIDAY
+//   SATURDAY
+// }
+
+// enum RoomType {
+//   REGULAR
+//   LAB
+//   PE
+//   SPECIALTY
+//   LIBRARY
+//   COMPUTER_LAB
+// }
+
+// model Room {
+//   id          String   @id @default(uuid())
+//   name        String   @unique
+//   type        RoomType @default(REGULAR)
+//   capacity    Int      @default(40)
+//   description String?
+//   createdAt   DateTime @default(now())
+//   updatedAt   DateTime @updatedAt
+
+//   timetableSlots TimetableSlot[]
+// }
+
+// model Period {
+//   id        String   @id @default(uuid())
+//   number    Int // Period 1, 2, 3...
+//   startTime String // "08:00"
+//   endTime   String // "08:40"
+//   isBreak   Boolean  @default(false)
+//   label     String? // "Period 1", "Lunch Break", etc.
+//   createdAt DateTime @default(now())
+
+//   timetableSlots TimetableSlot[]
+
+//   @@unique([number])
+// }
+
+// model TimetableSlot {
+//   id        String    @id @default(uuid())
+//   dayOfWeek DayOfWeek
+
+//   periodId String
+//   period   Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+//   subjectId String?
+//   subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+//   title     String?
+
+//   roomId String?
+//   room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+//   classes  SlotClass[]
+//   teachers SlotTeacher[]
+
+//   timetableAssignments TimetableAssignment[]
+
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
+
+// model SlotClass {
+//   id        String        @id @default(uuid())
+//   slotId    String
+//   slot      TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+//   classId   String
+//   class     Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+//   @@unique([slotId, classId])
+// }
+
+// model SlotTeacher {
+//   id        String        @id @default(uuid())
+//   slotId    String
+//   slot      TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+//   teacherId String
+//   teacher   User          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+//   @@unique([slotId, teacherId])
+// }
+
+// model TimetableAssignment {
+//   id   String   @id @default(uuid())
+//   date DateTime @db.Date
+
+//   slotId String
+//   slot   TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+//   lessonPlanId String
+//   lessonPlan   LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+
+//   // Quick lookup relations without joining slot
+//   classId String
+//   class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+//   createdAt DateTime @default(now())
+
+//   @@unique([date, slotId]) // One lesson plan per slot per day
+//   @@unique([date, classId, slotId]) // One lesson plan per class per slot per day
+// }
+
+// model TeacherAvailability {
+//   id        String            @id @default(uuid())
+//   teacherId String
+//   teacher   User              @relation("TeacherAvailability", fields: [teacherId], references: [id], onDelete: Cascade)
+//   dayOfWeek DayOfWeek
+//   periodId  String // Using String to allow matching period ID, or "ALL" / specific numbers
+//   state     AvailabilityState @default(AVAILABLE)
+//   createdAt DateTime          @default(now())
+
+//   @@unique([teacherId, dayOfWeek, periodId])
+// }
+
+// model ClassAvailability {
+//   id        String            @id @default(uuid())
+//   classId   String
+//   class     Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
+//   dayOfWeek DayOfWeek
+//   periodId  String
+//   state     AvailabilityState @default(AVAILABLE)
+//   createdAt DateTime          @default(now())
+
+//   @@unique([classId, dayOfWeek, periodId])
+// }
+
+// model SubjectAvailability {
+//   id        String            @id @default(uuid())
+//   subjectId String
+//   subject   Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+//   dayOfWeek DayOfWeek
+//   periodId  String
+//   state     AvailabilityState @default(AVAILABLE)
+//   createdAt DateTime          @default(now())
+
+//   @@unique([subjectId, dayOfWeek, periodId])
+// }
+
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -5,6 +452,346 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String                @id @default(uuid())
+  name                String
+  email               String                @unique
+  password            String
+  role                Role                  @default(STUDENT)
+  avatar              String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  departmentId        String?
+  classesOwned        Class[]               @relation("ClassOwner")
+  classMemberships    ClassMember[]
+  headedDepartment    Department?           @relation("DepartmentHead")      
+  commentsMade        LessonComment[]       @relation("UserComments")        
+  approvedPlans       LessonPlan[]          @relation("ApprovedBy")
+  lessonPlans         LessonPlan[]          @relation("CreatedBy")
+  lessonTeachers      LessonTeacher[]
+  parentLinks         ParentStudent[]       @relation("Parent")
+  childLinks          ParentStudent[]       @relation("Child")
+  slotTeachers        SlotTeacher[]
+  teacherAssignments  TeacherAssignment[]
+  teacherAvailability TeacherAvailability[] @relation("TeacherAvailability") 
+  department          Department?           @relation("DeptMembers", fields: [departmentId], references: [id])
+}
+
+model Department {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  headId      String?   @unique
+  courses     Course[]
+  head        User?     @relation("DepartmentHead", fields: [headId], references: [id])
+  subjects    Subject[]
+  members     User[]    @relation("DeptMembers")
+}
+
+model Subject {
+  id                 String                @id @default(uuid())
+  name               String
+  code               String?
+  abbreviation       String?
+  color              String?
+  departmentId       String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  department         Department?           @relation(fields: [departmentId], references: [id])
+  availabilities     SubjectAvailability[]
+  teacherAssignments TeacherAssignment[]
+  timetableLessons   TimetableLesson[]
+  timetableSlots     TimetableSlot[]
+
+  @@unique([name, departmentId])
+}
+
+model Course {
+  id           String     @id @default(uuid())
+  name         String
+  code         String?
+  departmentId String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  classes      Class[]
+  department   Department @relation(fields: [departmentId], references: [id])
+}
+
+model Class {
+  id                   String                @id @default(uuid())
+  name                 String
+  section              String?
+  subject              String?
+  grade                String?
+  description          String?
+  capacity             Int                   @default(45)
+  coverColor           String                @default("#1a73e8")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  courseId             String?
+  ownerId              String
+  course               Course?               @relation(fields: [courseId], references: [id])
+  owner                User                  @relation("ClassOwner", fields: [ownerId], references: [id])
+  availabilities       ClassAvailability[]
+  members              ClassMember[]
+  lessonClasses        LessonClass[]
+  lessonPlans          LessonPlan[]
+  slotClasses          SlotClass[]
+  TeacherAssignment    TeacherAssignment[]
+  timetableAssignments TimetableAssignment[]
+}
+
+model TeacherAssignment {
+  id        String   @id @default(uuid())
+  teacherId String
+  classId   String
+  subjectId String
+  createdAt DateTime @default(now())
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, classId, subjectId])
+}
+
+model ClassMember {
+  id       String   @id @default(uuid())
+  userId   String
+  classId  String
+  joinedAt DateTime @default(now())
+  class    Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, classId])
+}
+
+model LessonPlan {
+  id                   String                @id @default(uuid())
+  title                String
+  subject              String
+  grade                String
+  objectives           String[]
+  materials            String[]
+  warmUp               String?
+  instruction          String?
+  guidedPractice       String?
+  independentPractice  String?
+  closure              String?
+  assessment           String?
+  differentiation      String?
+  homework             String?
+  notes                String?
+  status               LessonStatus          @default(DRAFT)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  advanceDaysRequired  Int                   @default(3)
+  submissionDate       DateTime?
+  approvalDate         DateTime?
+  approverId           String?
+  approvalComment      String?
+  ocrSourceUrl         String?
+  teacherId            String
+  classId              String?
+  comments             LessonComment[]
+  approver             User?                 @relation("ApprovedBy", fields: [approverId], references: [id])
+  class                Class?                @relation(fields: [classId], references: [id])
+  teacher              User                  @relation("CreatedBy", fields: [teacherId], references: [id])
+  readinessAssessment  ReadinessAssessment?
+  resources            Resource[]
+  timetableAssignments TimetableAssignment[]
+}
+
+model ReadinessAssessment {
+  id              String     @id @default(uuid())
+  lessonPlanId    String     @unique
+  score           Int?
+  feedback        String?
+  questions       Json?
+  answers         Json?
+  sectionAnalysis Json?
+  status          String     @default("PENDING")
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  lessonPlan      LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+}
+
+model Resource {
+  id           String     @id @default(uuid())
+  name         String
+  type         String
+  url          String
+  createdAt    DateTime   @default(now())
+  lessonPlanId String
+  lessonPlan   LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+}
+
+model LessonComment {
+  id        String     @id @default(uuid())
+  planId    String
+  userId    String
+  section   String?
+  content   String
+  createdAt DateTime   @default(now())
+  plan      LessonPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user      User       @relation("UserComments", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ParentStudent {
+  id        String @id @default(uuid())
+  parentId  String
+  studentId String
+  parent    User   @relation("Parent", fields: [parentId], references: [id], onDelete: Cascade)
+  student   User   @relation("Child", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, studentId])
+}
+
+model TimetableLesson {
+  id        String          @id @default(uuid())
+  subjectId String?
+  count     Int             @default(1)
+  length    Int             @default(1)
+  roomType  RoomType?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  title     String?
+  classes   LessonClass[]
+  teachers  LessonTeacher[]
+  subject   Subject?        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model LessonClass {
+  id       String          @id @default(uuid())
+  lessonId String
+  classId  String
+  class    Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  lesson   TimetableLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, classId])
+}
+
+model LessonTeacher {
+  id        String          @id @default(uuid())
+  lessonId  String
+  teacherId String
+  lesson    TimetableLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  teacher   User            @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, teacherId])
+}
+
+model Room {
+  id             String          @id @default(uuid())
+  name           String          @unique
+  type           RoomType        @default(REGULAR)
+  capacity       Int             @default(40)
+  description    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  timetableSlots TimetableSlot[]
+}
+
+model Period {
+  id             String          @id @default(uuid())
+  number         Int             @unique
+  startTime      String
+  endTime        String
+  isBreak        Boolean         @default(false)
+  label          String?
+  createdAt      DateTime        @default(now())
+  timetableSlots TimetableSlot[]
+}
+
+model TimetableSlot {
+  id                   String                @id @default(uuid())
+  dayOfWeek            DayOfWeek
+  periodId             String
+  subjectId            String?
+  roomId               String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  title                String?
+  classes              SlotClass[]
+  teachers             SlotTeacher[]
+  timetableAssignments TimetableAssignment[]
+  period               Period                @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  room                 Room?                 @relation(fields: [roomId], references: [id])
+  subject              Subject?              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model SlotClass {
+  id      String        @id @default(uuid())
+  slotId  String
+  classId String
+  class   Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
+  slot    TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@unique([slotId, classId])
+}
+
+model SlotTeacher {
+  id        String        @id @default(uuid())
+  slotId    String
+  teacherId String
+  slot      TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  teacher   User          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([slotId, teacherId])
+}
+
+model TimetableAssignment {
+  id           String        @id @default(uuid())
+  date         DateTime      @db.Date
+  slotId       String
+  lessonPlanId String
+  classId      String
+  createdAt    DateTime      @default(now())
+  class        Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
+  lessonPlan   LessonPlan    @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  slot         TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@unique([date, slotId])
+  @@unique([date, classId, slotId])
+}
+
+model TeacherAvailability {
+  id        String            @id @default(uuid())
+  teacherId String
+  dayOfWeek DayOfWeek
+  periodId  String
+  state     AvailabilityState @default(AVAILABLE)
+  createdAt DateTime          @default(now())
+  teacher   User              @relation("TeacherAvailability", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, dayOfWeek, periodId])
+}
+
+model ClassAvailability {
+  id        String            @id @default(uuid())
+  classId   String
+  dayOfWeek DayOfWeek
+  periodId  String
+  state     AvailabilityState @default(AVAILABLE)
+  createdAt DateTime          @default(now())
+  class     Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, dayOfWeek, periodId])
+}
+
+model SubjectAvailability {
+  id        String            @id @default(uuid())
+  subjectId String
+  dayOfWeek DayOfWeek
+  periodId  String
+  state     AvailabilityState @default(AVAILABLE)
+  createdAt DateTime          @default(now())
+  subject   Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, dayOfWeek, periodId])
 }
 
 enum Role {
@@ -31,275 +818,6 @@ enum AvailabilityState {
   UNAVAILABLE
 }
 
-model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(STUDENT)
-  avatar    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Department / HOD info
-  departmentId String?
-  department   Department? @relation("DeptMembers", fields: [departmentId], references: [id])
-
-  // If user is HOD, they head a department
-  headedDepartment Department? @relation("DepartmentHead")
-
-  // Relations
-  lessonPlans         LessonPlan[]          @relation("CreatedBy")
-  approvedPlans       LessonPlan[]          @relation("ApprovedBy")
-  classMemberships    ClassMember[]
-  parentLinks         ParentStudent[]       @relation("Parent")
-  childLinks          ParentStudent[]       @relation("Child")
-  classesOwned        Class[]               @relation("ClassOwner")
-  teacherAssignments  TeacherAssignment[]
-  commentsMade        LessonComment[]       @relation("UserComments")
-  slotTeachers        SlotTeacher[]
-  teacherAvailability TeacherAvailability[] @relation("TeacherAvailability")
-  lessonTeachers      LessonTeacher[]
-}
-
-model Department {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  headId String? @unique
-  head   User?   @relation("DepartmentHead", fields: [headId], references: [id])
-
-  members  User[]    @relation("DeptMembers")
-  courses  Course[]
-  subjects Subject[]
-}
-
-model Subject {
-  id           String      @id @default(uuid())
-  name         String
-  code         String?
-  abbreviation String? // Short code like "M", "Eng", "PE"
-  color        String? // Hex color for timetable display
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-
-  teacherAssignments TeacherAssignment[]
-  timetableSlots     TimetableSlot[]
-  timetableLessons   TimetableLesson[]
-  availabilities     SubjectAvailability[]
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
-
-  @@unique([name, departmentId])
-}
-
-model Course {
-  id           String     @id @default(uuid())
-  name         String
-  code         String?
-  departmentId String
-  department   Department @relation(fields: [departmentId], references: [id])
-
-  classes   Class[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Class {
-  id          String   @id @default(uuid())
-  name        String
-  section     String?
-  subject     String?
-  grade       String?
-  description String?
-  capacity    Int      @default(45)
-  coverColor  String   @default("#1a73e8")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Link to Course
-  courseId String?
-  course   Course? @relation(fields: [courseId], references: [id])
-
-  // Relations
-  ownerId              String
-  owner                User                  @relation("ClassOwner", fields: [ownerId], references: [id])
-  members              ClassMember[]
-  lessonPlans          LessonPlan[]
-  slotClasses          SlotClass[]
-  lessonClasses        LessonClass[]
-  timetableAssignments TimetableAssignment[]
-  availabilities       ClassAvailability[]
-  TeacherAssignment    TeacherAssignment[]
-}
-
-// Teacher-Class-Subject mapping (Admin assigns teachers to classes for specific subjects)
-model TeacherAssignment {
-  id        String   @id @default(uuid())
-  teacherId String
-  classId   String
-  subjectId String
-  createdAt DateTime @default(now())
-
-  teacher User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-
-  @@unique([teacherId, classId, subjectId])
-}
-
-model ClassMember {
-  id       String   @id @default(uuid())
-  userId   String
-  classId  String
-  joinedAt DateTime @default(now())
-
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, classId])
-}
-
-model LessonPlan {
-  id                  String       @id @default(uuid())
-  title               String
-  subject             String
-  grade               String
-  objectives          String[]
-  materials           String[]
-  warmUp              String?
-  instruction         String?
-  guidedPractice      String?
-  independentPractice String?
-  closure             String?
-  assessment          String?
-  differentiation     String?
-  homework            String?
-  notes               String?
-  status              LessonStatus @default(DRAFT)
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-
-  // Advance submission tracking
-  advanceDaysRequired Int @default(3)
-
-  // Approval Workflow
-  submissionDate  DateTime?
-  approvalDate    DateTime?
-  approverId      String?
-  approver        User?     @relation("ApprovedBy", fields: [approverId], references: [id])
-  approvalComment String?
-
-  // AI Readiness
-  readinessAssessment ReadinessAssessment?
-  ocrSourceUrl        String?
-
-  // Relations
-  teacherId            String
-  teacher              User                  @relation("CreatedBy", fields: [teacherId], references: [id])
-  classId              String?
-  class                Class?                @relation(fields: [classId], references: [id])
-  resources            Resource[]
-  comments             LessonComment[]
-  timetableAssignments TimetableAssignment[]
-}
-
-model ReadinessAssessment {
-  id           String     @id @default(uuid())
-  lessonPlanId String     @unique
-  lessonPlan   LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
-
-  score           Int?
-  feedback        String?
-  questions       Json?
-  answers         Json?
-  sectionAnalysis Json? // AI critique per section
-  status          String  @default("PENDING")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Resource {
-  id        String   @id @default(uuid())
-  name      String
-  type      String
-  url       String
-  createdAt DateTime @default(now())
-
-  lessonPlanId String
-  lessonPlan   LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
-}
-
-model LessonComment {
-  id     String     @id @default(uuid())
-  planId String
-  plan   LessonPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  userId String
-  user   User       @relation("UserComments", fields: [userId], references: [id], onDelete: Cascade)
-
-  section   String? // e.g., "objectives", "instruction", or null for general
-  content   String
-  createdAt DateTime @default(now())
-}
-
-model ParentStudent {
-  id        String @id @default(uuid())
-  parentId  String
-  studentId String
-
-  parent  User @relation("Parent", fields: [parentId], references: [id], onDelete: Cascade)
-  student User @relation("Child", fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([parentId, studentId])
-}
-
-// ==================== TIMETABLE LESSONS (Edupage-style) ====================
-
-model TimetableLesson {
-  id String @id @default(uuid())
-
-  subjectId String?
-  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-
-  title    String?   // For meetings or custom labels
-
-  count    Int       @default(1) // Lessons per week
-  length   Int       @default(1) // Periods per lesson (1=single, 2=double)
-  roomType RoomType? // Preferred room type (null = any)
-
-  classes  LessonClass[]
-  teachers LessonTeacher[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model LessonClass {
-  id        String          @id @default(uuid())
-  lessonId  String
-  lesson    TimetableLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  classId   String
-  class     Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
-
-  @@unique([lessonId, classId])
-}
-
-model LessonTeacher {
-  id        String          @id @default(uuid())
-  lessonId  String
-  lesson    TimetableLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  teacherId String
-  teacher   User            @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-
-  @@unique([lessonId, teacherId])
-}
-
-// ==================== TIMETABLING ====================
-
 enum DayOfWeek {
   MONDAY
   TUESDAY
@@ -316,130 +834,4 @@ enum RoomType {
   SPECIALTY
   LIBRARY
   COMPUTER_LAB
-}
-
-model Room {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  type        RoomType @default(REGULAR)
-  capacity    Int      @default(40)
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  timetableSlots TimetableSlot[]
-}
-
-model Period {
-  id        String   @id @default(uuid())
-  number    Int // Period 1, 2, 3...
-  startTime String // "08:00"
-  endTime   String // "08:40"
-  isBreak   Boolean  @default(false)
-  label     String? // "Period 1", "Lunch Break", etc.
-  createdAt DateTime @default(now())
-
-  timetableSlots TimetableSlot[]
-
-  @@unique([number])
-}
-
-model TimetableSlot {
-  id        String    @id @default(uuid())
-  dayOfWeek DayOfWeek
-
-  periodId String
-  period   Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
-
-  subjectId String?
-  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-
-  title     String?
-
-  roomId String?
-  room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
-
-  classes  SlotClass[]
-  teachers SlotTeacher[]
-
-  timetableAssignments TimetableAssignment[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model SlotClass {
-  id        String        @id @default(uuid())
-  slotId    String
-  slot      TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
-  classId   String
-  class     Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
-
-  @@unique([slotId, classId])
-}
-
-model SlotTeacher {
-  id        String        @id @default(uuid())
-  slotId    String
-  slot      TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
-  teacherId String
-  teacher   User          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-
-  @@unique([slotId, teacherId])
-}
-
-model TimetableAssignment {
-  id   String   @id @default(uuid())
-  date DateTime @db.Date
-
-  slotId String
-  slot   TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
-
-  lessonPlanId String
-  lessonPlan   LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
-
-  // Quick lookup relations without joining slot
-  classId String
-  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-
-  @@unique([date, slotId]) // One lesson plan per slot per day
-  @@unique([date, classId, slotId]) // One lesson plan per class per slot per day
-}
-
-model TeacherAvailability {
-  id        String            @id @default(uuid())
-  teacherId String
-  teacher   User              @relation("TeacherAvailability", fields: [teacherId], references: [id], onDelete: Cascade)
-  dayOfWeek DayOfWeek
-  periodId  String // Using String to allow matching period ID, or "ALL" / specific numbers
-  state     AvailabilityState @default(AVAILABLE)
-  createdAt DateTime          @default(now())
-
-  @@unique([teacherId, dayOfWeek, periodId])
-}
-
-model ClassAvailability {
-  id        String            @id @default(uuid())
-  classId   String
-  class     Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
-  dayOfWeek DayOfWeek
-  periodId  String
-  state     AvailabilityState @default(AVAILABLE)
-  createdAt DateTime          @default(now())
-
-  @@unique([classId, dayOfWeek, periodId])
-}
-
-model SubjectAvailability {
-  id        String            @id @default(uuid())
-  subjectId String
-  subject   Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  dayOfWeek DayOfWeek
-  periodId  String
-  state     AvailabilityState @default(AVAILABLE)
-  createdAt DateTime          @default(now())
-
-  @@unique([subjectId, dayOfWeek, periodId])
 }

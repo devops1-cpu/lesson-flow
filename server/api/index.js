@@ -99,7 +99,8 @@
 const { PrismaClient } = require('@prisma/client');
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config({ path: "../.env.production" });
+const path = require('path');
+require('dotenv').config();
 
 const prisma = new PrismaClient();
 
@@ -126,10 +127,20 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors({ origin: process.env.FRONTEND_URL || true }));
+app.use(cors({ 
+  origin: [
+    process.env.FRONTEND_URL, 
+    'http://localhost:5173',  // dev
+    'http://localhost:3000'   // fallback
+  ],
+  credentials: true 
+}));
 app.use(express.json({ limit: '50mb' }));
 
-// Routes
+// Serve static files from lesson-flow/client/dist
+app.use(express.static(path.join(__dirname, '../../client/dist')));
+
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/lesson-plans', lessonPlanRoutes);
 app.use('/api/classes', classRoutes);
@@ -149,16 +160,21 @@ app.use('/api/timetable', timetableRoutes);
 app.use('/api/lesson-config', lessonConfigRoutes);
 app.use('/api/timeoff', timeoffRoutes);
 
-// Prisma Health check (replaces broken pool health check)
+// Prisma Health check
 app.get('/api/health', async (req, res) => {
   try {
-    await prisma.$queryRaw`SELECT 1`; // Test DB connection
+    await prisma.$queryRaw`SELECT 1`;
     res.json({ status: 'ok', db: 'connected' });
   } catch (error) {
     console.error('Health check failed:', error);
     res.status(500).json({ status: 'error', db: 'failed' });
   }
 });
+
+// Catch-all handler for SPA - serve index.html for all non-API routes
+// app.get('*', (req, res) => {
+//   res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
+// });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
