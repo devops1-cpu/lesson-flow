@@ -1,10 +1,9 @@
-
+const { PrismaClient } = require('@prisma/client');
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
-const { Pool } = require('pg');
+require('dotenv').config({path:"../.env.production"});
 
-
+const prisma = new PrismaClient();
 
 const authRoutes = require('../src/routes/authRoutes');
 const lessonPlanRoutes = require('../src/routes/lessonPlanRoutes');

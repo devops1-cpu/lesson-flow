@@ -16,7 +16,7 @@ sudo yum update -y -q
 
 # Install Node.js 18
 echo "✓ Installing Node.js 18..."
-curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash - > /dev/null 2>&1
+curl -fsSL https://rpm.nodesource.com/setup_24.x | sudo bash - > /dev/null 2>&1
 sudo yum install -y -q nodejs
 
 # Install PM2
