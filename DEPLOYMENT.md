@@ -108,7 +108,7 @@ ssh -i your-key.pem ec2-user@YOUR_EC2_IP 'bash ~/setup-ec2.sh'
 ```
 
 This will automatically install:
-- Node.js 18
+- Node.js 24
 - PM2 (process manager)
 - Nginx (reverse proxy)
 - PostgreSQL client
